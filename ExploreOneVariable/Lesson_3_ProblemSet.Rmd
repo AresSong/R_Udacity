@@ -1,0 +1,218 @@
+---
+title: "Lesson_3_ProblemSet"
+author: "Song Han"
+date: "Friday, March 18, 2016"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(ggplot2)
+data(diamonds)
+summary(diamonds)
+head(diamonds)
+str(diamonds)
+diamonds$color
+?diamonds
+```
+
+You can also embed plots, for example:
+
+``` Create a histogram of the price of all the diamonds in the diamond data set.
+ggplot(data = diamonds, aes(x = price)) + geom_histogram()
+summary(diamonds$price)
+```
+
+``` How many diamands cost less than 500
+sum(ifelse(diamonds$price<500,1,0))
+
+``` How many diamands cost less than 250
+sum(ifelse(diamonds$price<250,1,0))
+
+``` How many diamands cost 15000 or more
+sum(ifelse(diamonds$price>=15000,1,0))
+
+```
+ggplot(data = subset(diamonds, !is.na(price)) , aes(x = price)) + geom_histogram(binwidth = 5) +
+  scale_x_continuous(limits = c(320, 600), breaks = seq(320, 600, 5))
+
+ggsave('priceHistogram.png')
+
+
+```Break out the histogram of diamond prices by cut.
+ggplot(data = subset(diamonds, !is.na(price)) , aes(x = price)) + geom_histogram(binwidth = 5) +
+  scale_x_continuous(limits = c(320, 600), breaks = seq(320, 600, 5)) +
+  facet_wrap(~cut)
+
+by(diamonds$price, diamonds$cut,max)
+by(diamonds$price, diamonds$cut,min)
+by(diamonds$price, diamonds$cut,median)
+
+```y-axis to be different for each histogram.
+qplot(x = price, data = diamonds) + facet_wrap(~cut, scales="free")
+qplot(x = price, data = diamonds) + facet_wrap(~cut, scales="free_y")
+
+```log transformation
+qplot(x = price/carat, data = diamonds, binwidth = 0.05) + scale_x_log10() + facet_wrap(~cut, scales="free") 
+
+···boxplot
+ggplot(data = diamonds, aes(x = cut, y = price)) + geom_boxplot() + scale_y_log10()
+
+ggsave('priceBoxplot1.png')
+
+ggplot(data = diamonds, aes(x = cut, y = price)) + geom_boxplot()  + scale_y_continuous(limits = c(0, 10000), breaks = seq(0, 10000, 1000))  
+
+ggsave('priceHistogram2.png')
+
+by(diamonds$price,diamonds$color,summary)
+
+4214 - 911
+7695 - 1860
+
+```Investigate the price per carat of diamonds across the different colors of diamonds using boxplots.
+ggplot(data = diamonds, aes(x = color,y = price/carat)) + geom_boxplot() + scale_y_continuous(limits = c(0, 6000), breaks = seq(0, 6000, 1000))
+ggsave('pricePerCaratByColor.png')
+
+
+```
+ggplot(data = diamonds ,aes(x = carat, y = ..count..)) +
+  geom_freqpoly(aes(color = carat), binwidth=0.1) + 
+  scale_x_continuous(limits = c(0, 5), breaks = seq(0, 5, 0.1)) 
+
+
+```Gapminder Data
+```load packages
+library(ggplot2)
+#install.packages('reshape')
+library(reshape)
+library(dplyr)
+
+```load data
+gapminder <- read.csv('indicator_t above 15 employ.csv',  header = T, check.names = F)
+
+```over view
+#str(gapminder)
+#head(gapminder)
+
+``` transform
+gapminder <- t(gapminder)
+#class(gapminder)
+
+```
+colnames(gapminder) <- gapminder[1,]
+gapminder <- gapminder[-1,]
+years <- dimnames(gapminder)[[1]]
+gapminder <- data.frame(gapminder)
+gapminder$years <- years
+gapminder$years <- as.integer(gapminder$years)
+#gapminder <- tbl_df(gapminder) has problem to transform
+row.names(gapminder) <- NULL 
+
+#gapminder$years
+
+```
+#head(gapminder)
+#row.names(gapminder)
+#str(gapminder)
+ 
+```unpivot
+gapminder <- melt(gapminder, id = c("years"))
+
+```rename column name
+colnames(gapminder) <- c("year","country","employ")
+
+```tranform value from factor to numeric
+gapminder$employ <- as.numeric(levels(gapminder$employ))[gapminder$employ]
+
+
+```populate plots
+ggplot(data = subset(gapminder, country =="China" | country =="United.States" ), aes(x = year, y = employ, color = country)) + geom_line() + scale_x_continuous(breaks = seq(1991,2010,1)) + facet_grid(country~., scale="free")
+
+ggsave('employmentRate_line.png')
+
+ggplot(data = subset(gapminder, country =="China" | country =="United.States" ), aes(x = year, y = employ, color = country)) + geom_boxplot() + scale_x_continuous(breaks = seq(1991,2010,1)) +   facet_grid(country~., scale="free")
+
+ggsave('employmentRate_boxplot.png')
+
+ggplot(data = subset(gapminder, country =="China" | country =="United.States" ), aes(x = year, y = employ, fill = country,color = country)) + geom_bar(stat="identity") + scale_x_continuous(breaks = seq(1991,2010,1)) + facet_grid(country~., scale="free")
+
+ggsave('employmentRate_bar.png')
+
+ggplot(data = subset(gapminder, country =="China" | country =="United.States" ), aes(x = year, y = employ, color = country)) + geom_density(stat="identity",aes(colour=country, fill=country), alpha=0.3) + scale_x_continuous(breaks = seq(1991,2010,1))  
+
+ggsave('employmentRate_density.png')
+
+
+
+```Your task is to investigate the distribution of your friends'birth months and days.
+
+```load library
+setwd("C:\\Users\\ares han\\Documents\\Learning\\Udacity\\R\\ExploreOneVariable")
+library(ggplot2)
+#install.packages('lubridate')
+library('lubridate')
+#install.packages('dplyr')
+library(dplyr)
+
+```load csv file
+birthday <- read.csv("birthdaysExample.csv")
+
+```glimpse on data
+summary(birthday)
+dim(birthday)
+str(birthday)
+head(birthday)
+
+
+```formate date
+birthday$dates <- as.Date(birthday$dates, format = "%m/%d/%y")
+head(birthday)
+str(birthday)
+
+birthday <- tbl_df(birthday)
+
+# How many people share your birthday? Do you know them?
+#1033
+nrow(birthday)
+
+# Which month contains the most number of birthdays?
+#March has most number of birthdays
+#month(birthday$dates) get the month of date
+birthday %>% group_by(month(dates)) %>% summarise(n = n()) %>%  filter(n == max(n))
+
+ggplot(data = birthday, aes(x = month(dates))) + geom_histogram(binwidth = 1, color = "blue", fill = "blue" ) + scale_x_continuous(breaks = seq(0, 12, 1))
+ggsave('birthday_monthHasMostBirthday.png')
+
+# How many birthdays are in each month?
+# check outputs
+by(birthday$dates, month(birthday$dates),length)
+birthday %>% group_by(month(dates)) %>% summarise(n = n())
+
+# Which day of the year has the most number of birthdays?
+# 37, 142 and 197 days of year have most number of birthday
+birthday %>% group_by(yday(dates)) %>% summarise(n = n()) %>%  filter(n == max(n))
+
+ggplot(data = birthday, aes(x = yday(dates))) + geom_histogram(binwidth = 1) + scale_x_continuous(breaks = seq(1,365,1))
+ggsave('birthday_dayOfYear.png')
+
+# Do you have at least 365 friends that have birthdays on everyday of the year?
+# no, there are fews days which don't have birthday
+noBirthday <- c() 
+i <- 1
+while(i<367)
+{
+ if (nrow(subset(birthday, yday(dates) == i)) == 0)
+ {
+   noBirthday <- append(noBirthday,i);  
+ } 
+ i <- i + 1;
+}
+
+noBirthday
+
+
+
+

@@ -1,0 +1,105 @@
+---
+title: "WhiteWineQuality"
+author: "Song Han"
+date: "2016-08-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{install necessary packages}
+install.packages("ggplot2", dependencies = T) 
+install.packages("knitr", dependencies = T)
+install.packages("dplyr", dependencies = T)
+install.packages("tidyr", dependencies = T)
+install.packages('gridExtra') 
+```
+
+## Load Library
+```{load library}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(gridExtra) 
+```
+
+```{load data}
+setwd("C:\\Users\\ares\\Documents\\Udacity\\R\\EDA_Project")
+WhiteWine <- read.csv("wineQualityWhites.csv", sep = ',')
+WhiteWine <- tbl_df(WhiteWine)
+head(WhiteWine)
+#WhiteWine <- select(WhiteWine, fixed.acidity: quality)
+WhiteWine_long <- WhiteWine %>% gather("variable","value",fixed.acidity: quality)
+WhiteWine_long  %>% filter(X == 1)
+names(WhiteWine)
+names(WhiteWine_long)
+```
+
+```{Initial inspections}
+glimpse(WhiteWine)
+summary(WhiteWine)
+head(WhiteWine)
+str(WhiteWine)
+names(WhiteWine)
+nrow(WhiteWine)
+ncol(WhiteWine)
+```
+
+```{dispaly quality distribution}
+ggplot(data = WhiteWine, aes(x = quality, stat = "count")) + geom_bar()
+ggplot(data = WhiteWine, aes(x = quality, stat = "count")) + geom_bar() +  scale_y_log10()  + scale_x_continuous(breaks = 1:10) 
+ 
+```
+As I can see from the graph, there is no wine which quality less than 3 or equals to 10. Dive into the dataset and check if it is true.
+
+```{check quality less than 3 or equals to 10}
+WhiteWine %>% filter(quality <3 | quality == 10) %>% nrow
+```
+There is no wine which quality less than 3 or equals to 10
+
+```{check if there are same patterns in the distribution of other attributs}
+
+gg.fixed.acidity <- ggplot(data = WhiteWine, aes(x = fixed.acidity, stat = "count")) + geom_histogram( binwidth = 1) +  scale_y_log10()   
+
+gg.volatile.acidity <- ggplot(data = WhiteWine, aes(x = volatile.acidity, stat = "count")) + geom_histogram(  binwidth = 0.1) +  scale_y_log10()   
+
+gg.citric.acid <- ggplot(data = WhiteWine, aes(x = citric.acid, stat = "count")) + geom_histogram( binwidth = 0.1) +  scale_y_log10()  
+
+gg.residual.sugar <- ggplot(data = WhiteWine, aes(x = residual.sugar, stat = "count")) + geom_histogram(binwidth = 5) +  scale_y_log10()   
+
+gg.chlorides <- ggplot(data = WhiteWine, aes(x = chlorides, stat = "count")) + geom_histogram(binwidth = 0.05) +  scale_y_log10()   
+
+gg.free.sulfur.dioxide <- ggplot(data = WhiteWine, aes(x = free.sulfur.dioxide, stat = "count")) + geom_histogram(binwidth = 5) +  scale_y_log10()  
+
+gg.total.sulfur.dioxide <- ggplot(data = WhiteWine, aes(x = total.sulfur.dioxide, stat = "count")) + geom_histogram(binwidth = 40) +  scale_y_log10()   
+
+gg.density <- ggplot(data = WhiteWine, aes(x = density, stat = "count")) + geom_histogram(binwidth = 0.01) +  scale_y_log10()   
+
+gg.pH <- ggplot(data = WhiteWine, aes(x = pH, stat = "count")) + geom_histogram(binwidth = 0.05) +  scale_y_log10()   
+
+gg.sulphates <- ggplot(data = WhiteWine, aes(x = sulphates, stat = "count")) + geom_histogram(binwidth = 0.1) +  scale_y_log10() 
+
+gg.alcohol <- ggplot(data = WhiteWine, aes(x = alcohol, stat = "count")) + geom_histogram(binwidth = 2) +  scale_y_log10()   
+
+grid.arrange(gg.fixed.acidity, gg.volatile.acidity,gg.citric.acid
+            ,gg.residual.sugar, gg.chlorides, gg.chlorides
+            ,gg.free.sulfur.dioxide, gg.total.sulfur.dioxide, gg.density
+            ,gg.pH, gg.sulphates, gg.alcohol, ncol=3)
+ 
+'''
+ggplot(data = WhiteWine_long, aes(x = value, stat = "count")) + geom_histogram(binwidth = 2)  + facet_grid(.~variable, scales = "free")+  scale_y_log10()
+
+ggplot(data = WhiteWine_long, aes(x = value, stat = "count")) + geom_histogram()  + facet_wrap(~variable, scales = "free")+  scale_y_log10()
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
