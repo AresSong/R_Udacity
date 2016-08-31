@@ -15,26 +15,39 @@ install.packages("knitr", dependencies = T)
 install.packages("dplyr", dependencies = T)
 install.packages("tidyr", dependencies = T)
 install.packages('gridExtra') 
+install.packages("GGally", dependencies = T)
+install.packages('RColorBrewer')
+install.packages("memisc")
+install.packages("e1071")
+
 ```
 
 ## Load Library
 ```{load library}
 library(ggplot2)
+library(knitr)
 library(dplyr)
 library(tidyr)
-library(gridExtra) 
+library(gridExtra)
+library(GGally)
+library(RColorBrewer)
+library(memisc)
+library(e1071)
+```
+
+```{define fuction for RMSE}
+rmse <- function(error)
+{
+  sqrt(mean(error^2))
+}
 ```
 
 ```{load data}
 setwd("C:\\Users\\ares\\Documents\\Udacity\\R\\EDA_Project")
 WhiteWine <- read.csv("wineQualityWhites.csv", sep = ',')
 WhiteWine <- tbl_df(WhiteWine)
-head(WhiteWine)
-#WhiteWine <- select(WhiteWine, fixed.acidity: quality)
+WhiteWine$quality <- factor(WhiteWine$quality, levels = c("0","1","2","3","4","5","6","7", "8","9","10"))
 WhiteWine_long <- WhiteWine %>% gather("variable","value",fixed.acidity: quality)
-WhiteWine_long  %>% filter(X == 1)
-names(WhiteWine)
-names(WhiteWine_long)
 ```
 
 ```{Initial inspections}
@@ -49,17 +62,32 @@ ncol(WhiteWine)
 
 ```{dispaly quality distribution}
 ggplot(data = WhiteWine, aes(x = quality, stat = "count")) + geom_bar()
-ggplot(data = WhiteWine, aes(x = quality, stat = "count")) + geom_bar() +  scale_y_log10()  + scale_x_continuous(breaks = 1:10) 
- 
 ```
-As I can see from the graph, there is no wine which quality less than 3 or equals to 10. Dive into the dataset and check if it is true.
+
+```{refine breaks for the distribution}
+ggplot(data = WhiteWine, aes(x = quality, stat = "count")) + geom_bar()   + scale_x_continuous(breaks = 1:10) 
+```
+
+```{refine quality distribution by using converting count to log10}
+ggplot(data = WhiteWine, aes(x = quality, stat = "count")) + geom_bar() +  scale_y_log10()  + scale_x_continuous(breaks = 1:10) 
+```
+using log scale cause missing observations because there are only 5 observations have quality 10  
+
 
 ```{check quality less than 3 or equals to 10}
-WhiteWine %>% filter(quality <3 | quality == 10) %>% nrow
+WhiteWine %>% filter(quality <3 | quality == 10)  
 ```
-There is no wine which quality less than 3 or equals to 10
+There are 5 observations which quality equals to 10
 
-```{check if there are same patterns in the distribution of other attributs}
+
+```{Quality larger or equals  to 9}
+WhiteWine_TopQuality <-  WhiteWine %>% filter(quality >= 9)  
+```
+
+
+
+
+```{check the distribution of other attributs}
 
 gg.fixed.acidity <- ggplot(data = WhiteWine, aes(x = fixed.acidity, stat = "count")) + geom_histogram( binwidth = 1) +  scale_y_log10()   
 
@@ -87,11 +115,177 @@ grid.arrange(gg.fixed.acidity, gg.volatile.acidity,gg.citric.acid
             ,gg.residual.sugar, gg.chlorides, gg.chlorides
             ,gg.free.sulfur.dioxide, gg.total.sulfur.dioxide, gg.density
             ,gg.pH, gg.sulphates, gg.alcohol, ncol=3)
- 
-'''
+```
+
+
+
+
+```{use facet against a long dataset instead of create plots separately}
 ggplot(data = WhiteWine_long, aes(x = value, stat = "count")) + geom_histogram(binwidth = 2)  + facet_grid(.~variable, scales = "free")+  scale_y_log10()
 
 ggplot(data = WhiteWine_long, aes(x = value, stat = "count")) + geom_histogram()  + facet_wrap(~variable, scales = "free")+  scale_y_log10()
+
+```
+
+```{use ggally to glimpse}
+ggpairs(data = WhiteWine,columns = 2:13,title = "White Wine Quanlity",colour = "set")
+
+ncol(WhiteWine)
+
+```
+
+```{calculate correlation coefficient}
+cor(WhiteWine)
+
+```
+
+
+```{check relationship between quality and alcohol}
+ggplot(data = WhiteWine, aes(x = quality, y = alcohol,group = quality)) + geom_boxplot()
+
+```
+
+```{}
+with(WhiteWine, cor.test(quality, alcohol))
+with(WhiteWine, cor.test(quality, density))
+factor(WhiteWine$quality)
+ggplot(aes(x = density, y = alcohol, color = factor(quality)), data = WhiteWine) +  geom_point(alpha = 0.5, size = 1, position = 'jitter') + scale_color_brewer(type="seq", palette=1) +  
+  ggtitle('Price (log10) by Cube-Root of Carat and Cut')
+
+
+```
+
+```{normalize attributes}
+WhiteWine
+
+ 
+doit <- function(x) {(x - min(x, na.rm=TRUE))/(max(x,na.rm=TRUE) -
+min(x, na.rm=TRUE))}
+
+WhiteWine$quality <- as.numeric(WhiteWine$quality)
+WhiteWine_Normalized <- as.data.frame(lapply(WhiteWine[1:13], doit))
+#head(WhiteWine_Normalized)
+WhiteWine_Normalized$X <- WhiteWine$X
+WhiteWine_Normalized$quality <- WhiteWine$quality
+#head(WhiteWine_Normalized)
+ggpairs(data = WhiteWine_Normalized,columns = 2:13
+        ,title = "White Wine Quanlity")
+
+
+```
+
+
+```{Three Variables: alcohol, density, quality }
+ggplot(WhiteWine,aes(x = alcohol, y = density, color = quality)) + 
+  geom_point(alpha = 0.5, position = 'jitter') +
+  scale_y_continuous(limits = c(0.985, 1.005)) +
+  scale_color_brewer(type = 'seq', palette=3, guide = guide_legend(title = 'Quality', reverse = T,override.aes = list(alpha = 1, size = 2)))
+
+ggplot(WhiteWine, aes(x=alcohol, fill=quality)) +
+  geom_histogram(position="dodge", binwidth = 1) +
+  scale_fill_brewer()
+  
+ggplot(WhiteWine, aes(x=density, fill=quality)) +
+  geom_histogram(position="dodge", binwidth = 0.02) +
+  scale_x_continuous(limits = c(0.985, 1.005)) + 
+  scale_fill_brewer()
+  
+ggplot(WhiteWine, aes(x=chlorides, fill=quality)) +
+  geom_histogram(position="dodge", binwidth = 0.02) +
+  scale_x_continuous(limits = c(0.01, 0.1)) + 
+  scale_fill_brewer()
+```
+
+```{4 variables}
+
+ggplot(WhiteWine, aes(x=chlorides)) +
+  geom_histogram(position="dodge") +
+  scale_x_continuous(limits = c(0.01, 0.1), breaks = seq(0.01, 0.1, 0.005)) +
+  scale_fill_brewer()
+  
+ggplot(WhiteWine,aes(x = alcohol, y = density, color = quality,size = chlorides)) + 
+  geom_point(alpha = 0.5, position = 'jitter') +
+  scale_y_continuous(limits = c(0.985, 1.005)) +
+  scale_color_brewer(type = 'seq', palette=3, guide = guide_legend(title = 'Quality', reverse = T,override.aes = list(alpha = 1, size = 2)))+
+  scale_size_area(limits = c(0.01, 0.1), breaks = seq(0.01, 0.1, 0.005))
+
+ggplot(WhiteWine_Normalized,aes(x = alcohol, y = density, color = quality,size = chlorides)) + 
+  geom_point(alpha = 0.5, position = 'jitter') +
+  scale_color_brewer(type = 'seq', palette=3, guide = guide_legend(title = 'Quality', reverse = T,override.aes = list(alpha = 1, size = 2)))
+
+```
+
+
+
+
+
+```{linear regression model}
+WhiteWine$quality <- as.numeric(WhiteWine$quality)
+
+
+lm1 <- lm(quality ~ alcohol, data = WhiteWine)
+lm2 <- update(lm1, ~ . + density)
+lm3 <- update(lm2, ~ . + chlorides)
+mtable(lm1, lm2, lm3)
+mtable(lm1)
+predictedY <- predict(lm3, WhiteWine)
+lm3$residuals
+error <- lm3$residuals  # same as data$Y - predictedY
+predictionRMSE <- rmse(error)
+predictionRMSE
+
+data.frame(real = WhiteWine$quality, pred = predictedY)
+
+
+plot(WhiteWine$alcohol,WhiteWine$quality )
+abline(mbig1)
+```
+
+```{support vector machine}
+WhiteWine$quality <- as.numeric(WhiteWine$quality)
+svm1 <- svm(quality ~ alcohol, data = WhiteWine)
+svm2 <- update(svm1, ~ . + density)
+svm3 <- update(svm2, ~ . + chlorides)
+
+predictedY_svm <- predict(svm3, WhiteWine)
+error <- WhiteWine$quality - predictedY_svm
+svrPredictionRMSE <- rmse(error)
+svrPredictionRMSE 
+
+
+
+svm(quality ~ .,  data = WhiteWine[,c("alcohol","density","chlorides","quality")])
+
+tuneResult <- tune(svm, quality ~ .,  data = WhiteWine[,c("alcohol","density","chlorides","quality")],
+                    ranges = list(epsilon = seq(0,1,0.1), cost = 2^(2:4)))
+tuneResult
+
+
+
+svm1 <- svm(quality ~ alcohol, data = WhiteWine)
+svm2 <- update(svm1, ~ . + density)
+svm3 <- update(svm2, ~ . + chlorides)
+
+predictedY_svm <- predict(svm3, WhiteWine, epsilon = 0.3, cost = 6)
+error <- WhiteWine$quality - predictedY_svm
+svrPredictionRMSE <- rmse(error)
+svrPredictionRMSE 
+
+ 0.7842435
+
+- best parameters:
+ epsilon cost
+     0.3    4
+
+```
+
+- sampling method: 10-fold cross validation 
+
+
+
+- best performance: 0.6133254 
+
+
 
 
 ## Including Plots

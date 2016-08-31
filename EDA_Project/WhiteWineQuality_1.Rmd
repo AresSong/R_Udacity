@@ -1,0 +1,424 @@
+---
+title: "WhiteWineQuality"
+author: "Song Han"
+date: "2016-08-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{install necessary packages}
+install.packages("ggplot2", dependencies = T) 
+install.packages("knitr", dependencies = T)
+install.packages("dplyr", dependencies = T)
+install.packages("tidyr", dependencies = T)
+install.packages('gridExtra') 
+install.packages("GGally", dependencies = T)
+install.packages('RColorBrewer')
+install.packages("memisc")
+install.packages("e1071")
+install.packages("corrplot")
+```
+
+## Load Library
+```{load library}
+library(ggplot2)
+library(knitr)
+library(dplyr)
+library(tidyr)
+library(gridExtra)
+library(GGally)
+library(RColorBrewer)
+library(memisc)
+library(e1071)
+library(corrplot)
+```
+
+```{define fuction for RMSE and define function for normalization(feature scaling)}
+rmse <- function(error)
+{
+  sqrt(mean(error^2))
+}
+
+doit <- function(x) {(x - min(x, na.rm=TRUE))/(max(x,na.rm=TRUE) -
+min(x, na.rm=TRUE))}
+```
+
+```{load data}
+setwd("C:\\Users\\ares\\Documents\\Udacity\\R\\EDA_Project")
+WhiteWine <- read.csv("wineQualityWhites.csv", sep = ',')
+WhiteWine <- tbl_df(WhiteWine)
+#WhiteWine$quality <- factor(WhiteWine$quality, levels = c("0","1","2","3","4","5","6","7", "8","9","10"))
+```
+
+```{build a long dataset which pivot variables to obervations}
+WhiteWine_long <- WhiteWine %>% gather("variable","value",fixed.acidity: quality)
+```
+
+
+```{Build a normalized dataset(Feature scaling)}
+#WhiteWine$quality <-as.numeric(levels(WhiteWine$quality))[WhiteWine$quality]
+WhiteWine_Normalized <- tbl_df(lapply(WhiteWine[2:12], doit))
+WhiteWine_Normalized$X <- WhiteWine$X
+WhiteWine_Normalized$quality <- WhiteWine$quality
+```
+Build a normalized dataset enable me omit unit of attributes and draw differnt attributs in one diagram.
+
+#Univariate Plots Section
+
+##Initial inspections
+```{Initial inspections}
+summary(WhiteWine)
+str(WhiteWine)
+dim(WhiteWine)
+```
+
+
+##check quality distribution
+###quick check
+```{dispaly quality distribution}
+ggplot(data = WhiteWine, aes(x = quality, stat = "count")) + geom_bar()
+```
+
+###Abjust breaks
+```{refine breaks for the distribution}
+ggplot(data = WhiteWine, aes(x = quality, stat = "count")) + geom_bar()   + scale_x_continuous(breaks = 1:10) 
+```
+The amount of low quality wine and high quality wine are much less than the normal wine. It was barely observe any high quality wine(quality higher than 9) in the diagram because the low percentage of high quality wine.
+
+###Abjust y axis scale
+```{refine quality distribution by using converting count to sqrt}
+ggplot(data = WhiteWine, aes(x = quality, stat = "count")) + geom_bar() +  scale_y_sqrt()  + scale_x_continuous(breaks = 1:10)
+```
+The quality distribution is approximately symmetrical. Most of wines have the quality 5 to 7. 
+I wonder if the good quality wine(quality is 8 or 9) or low quality wine have anything in common as groups.
+
+###Check number and percentage of each quality
+```{check number and percentage of each quality}
+WhiteWine %>% group_by(quality) %>% count(quality)
+WhiteWine %>% group_by(quality) %>% summarise (n = n())   %>%   mutate(freq = n / sum(n))
+```
+There are 5 observations quality equal to 9 and 175 observations quality equal to 8
+
+##Divide quality into three group
+```{Divide quality into three group}
+WhiteWine_High <- WhiteWine_Normalized %>% filter(quality == 9 | quality == 10) %>% dplyr::select(-X,-quality) %>% summarise_each(funs(median))
+WhiteWine_High['group'] <- 'High'
+
+WhiteWine_Middle <- WhiteWine_Normalized %>% filter(quality >=6 & quality <= 8) %>% dplyr::select(-X,-quality) %>% summarise_each(funs(median))
+WhiteWine_Middle['group'] <- 'Middle'
+
+WhiteWine_Low <- WhiteWine_Normalized %>% filter(quality <= 5 ) %>% dplyr::select(-X,-quality) %>% summarise_each(funs(median))
+WhiteWine_Low['group'] <- 'Low'
+
+WhiteWine_Full <- WhiteWine_Normalized %>% dplyr::select(-X,-quality) %>% summarise_each(funs(median))
+WhiteWine_Full['group'] <- 'Full'
+
+WhiteWine_QualityGroup <- bind_rows(WhiteWine_High,WhiteWine_Middle,WhiteWine_Low,WhiteWine_Full)
+WhiteWine_QualityGroup <- WhiteWine_QualityGroup %>% gather("variable","value",fixed.acidity: alcohol)
+
+WhiteWine_QualityGroup$group <- factor(WhiteWine_QualityGroup$group, levels = c("Full","Low","Middle","High"))
+
+ggplot(data = WhiteWine_QualityGroup, aes(x = variable, y = value,fill = group)) + geom_bar(stat = "identity", position=position_dodge())
+```
+Divide quality into three group and compare the median of attributes. The criteria of grouping was decidied because we normally divide obervations by 3 quantiles: for example the top 25%, middle 50% and the bottom 25%. It is not exact 25% for top in this case, but it can represent a small top group, a large middle group, and a small tile quality group.
+Good Quality Group: quality equals to 8 or 9
+Median Quality Group: quality between 5 and 7
+Low Quality Group: Quality equals to 3 or 4
+The sulphates and volatile.acidity don't have much difference from low quality to high quality wine.
+The alcohol,chlorides, density, PH, residual.sugar and total.sulfur.dioxide have obvious trends from low to high quality wine.
+The citric.acid, fixed.acidity,free.sulfur.dioxide might be able to distinguish high quality wine from middle quality wine.
+I wonder if there is a algorithm which allow me to evaluate quality gradually. i.e use alchohol to distinguish low from middle and high, then use citric.acid to distinguish middle from high.
+
+
+##checking distribution of "alcohol","density","chlorides","volatile.acidity", "pH","residual.sugar","total.sulfur.dioxide".
+variables are picked up according to result above, these variables seem to be more likely to determine wine quality. volatile.acidity is an exception, although it seems unlikely to tell quality of wine, I look into this varialbe to prove it my guess.
+
+###overview the distribution of "alcohol", "density", "chlorides", "volatile.acidity", "pH", "residual.sugar", "total.sulfur.dioxide"
+```{overview the distribution of "alcohol","density","chlorides","volatile.acidity", "pH","residual.sugar","total.sulfur.dioxide"}
+gg.volatile.acidity <- ggplot(data = WhiteWine, aes(x = volatile.acidity, stat = "count")) + geom_histogram(  binwidth = 0.05) +  scale_y_sqrt()
+
+gg.chlorides <- ggplot(data = WhiteWine, aes(x = chlorides, stat = "count")) + geom_histogram(binwidth = 0.01) +  scale_y_sqrt() 
+
+gg.density <- ggplot(data = WhiteWine, aes(x = density, stat = "count")) + geom_histogram(binwidth = 0.001) +  scale_y_sqrt()   
+
+gg.alcohol <- ggplot(data = WhiteWine, aes(x = alcohol, stat = "count")) + geom_histogram(binwidth = 0.1) + scale_y_sqrt() 
+
+gg.pH <- ggplot(data = WhiteWine, aes(x = pH, stat = "count")) + geom_histogram(binwidth = 0.05) +  scale_y_sqrt()
+
+gg.residual.sugar <- ggplot(data = WhiteWine, aes(x = residual.sugar, stat = "count")) + geom_histogram(binwidth = 5) +  scale_y_sqrt()   
+
+gg.total.sulfur.dioxide <- ggplot(data = WhiteWine, aes(x = total.sulfur.dioxide, stat = "count")) + geom_histogram(binwidth = 40) +  scale_y_sqrt()   
+
+grid.arrange( gg.volatile.acidity, gg.chlorides, gg.density, gg.alcohol,gg.pH,gg.residual.sugar ,gg.total.sulfur.dioxide,  ncol=2)
+
+ggplot(data = WhiteWine, aes(x = density)) + geom_boxplot() 
+```
+
+###volatile.acidity distribution
+The volatile.acidity distribution is right skewed. The volatile.acidity for most of wine is between 0.15 to 0.45. As it could cause an unpleasant taste when it at too high level. I reckon most of decent wine has a volatile.acidity lower than 0.45.
+```{volatile.acidity}
+WhiteWine_QualityGroup %>% filter(variable == 'volatile.acidity')
+```
+As I can see from the normalized median value of each group, the low quality wine usually has higher volatile.acidity, but volatile.acidity doesn't show a stable trend from low to high quality wine. So it may only indicate a bad quality when it's significant high.
+
+
+###chlorides distribution
+The chlorides distribution is right skewed as well. The chlorides for most of wine is approximatly between 0.02 to 0.06 and peaking about 0.04. Chlorides represent amount of sodium chloride in wine and its unit is "g/dm^3". As I found in google, the salt wasn't added in the process of brewing but depends on the soil where the grape grow up. A decent of amount of salt has positive affect to taste, but too much salt could cause taste bitter. Therefore, I suspect most of low qualty wine may has chlorides higher than 0.07.
+```{check normalized median value for chlorides}
+WhiteWine_QualityGroup %>% filter(variable == 'chlorides')
+```
+As normalized median value shows in low quality group, the low quality wines have higher chlorides 
+
+###density distribution
+According to the initial diagram of density, there are few outliers larger than 1. Those outliers affected the diagram scaling and make the diagram could not show clear trend on density. I remove those outliers and re-draw the diagram. 
+Also, the density of water is 1 and density of alcohol is lower than 1, so I am curious about all wine that have density high than wine because that means the wine has higher percentage of sum of salt, sugar and other ingredient than percentage of alcohol. I wonder if it is unusual. 
+```{remove outliers for density}
+WhiteWine %>% filter(density <= 1 ) %>% ggplot( aes(x = density, stat = "count")) + geom_histogram(binwidth = 0.0005) +  scale_y_sqrt()
+```
+Most of density allocate between 0.99 and 0.9975, as it is a small difference for human to taste, I am not sure if it really affect taste.
+
+```{comare the quality of wines which density larger than 1 with quality distribution of all observation}
+WhiteWine %>% filter(density > 1 ) %>%group_by(quality) %>% summarise (n = n())   %>%   mutate(freq = n / sum(n))
+WhiteWine %>% group_by(quality) %>% summarise (n = n())   %>%   mutate(freq = n / sum(n))
+```
+The wines which density larger than 1 have a lower quality than average.
+
+###alcohol distribution
+```{adjust binwidth for alcohol distribution}
+ggplot(data = WhiteWine, aes(x = alcohol, stat = "count")) + geom_histogram(binwidth = 0.1) + scale_y_sqrt() 
+ggplot(data = WhiteWine, aes(x = alcohol, stat = "count")) + geom_histogram(binwidth = 0.2) + scale_y_sqrt() 
+ggplot(data = WhiteWine, aes(x = alcohol, stat = "count")) + geom_histogram(binwidth = 0.05) + scale_y_sqrt() 
+```
+The alcohol distribution is right skewed. The alcohol is peaking at 9.5. 
+
+###PH distribution
+```{reset }
+ggplot(data = WhiteWine, aes(x = pH, stat = "count")) + geom_histogram(binwidth = 0.03) +  scale_y_sqrt()
+```
+The binwidth was reset to 0.03. The pH distribution looks symmetrical and line up with the quality distribtution. I will do further investigation on the relationship between pH and quality in the bivariate section
+
+###residual.sugar distribtuion 
+It seems most of wines have residual.sugar less than 20, so I remove outliers which residual.sugar larger than 20 and re-draw the diagram.
+```{remove outliers and redraw diagram for residual.sugar}
+WhiteWine %>% filter(residual.sugar <= 20) %>% ggplot(aes(x = residual.sugar, stat = "count")) + geom_histogram(binwidth = 0.5) +  scale_y_sqrt()   
+```
+Reset binwidth to 0.5 and observe the residual.sugar peak around 2. 
+
+```{quality distribution for wines which residual.sugar between 1.75 to 2.25}
+WhiteWine %>% filter(residual.sugar>1.5 & residual.sugar<2.5) %>% ggplot(aes(x = quality, stat = "count")) + geom_histogram(binwidth = 0.5) +  scale_y_sqrt()   
+```
+The quality distribution of wines which residual.sugar between 1.75 to 2.25 seems line up with quality distribution of all observations. 
+
+###total.sulfur.dioxide
+Remove total.sulfur.dioxide higher than 300 and redraw the graph.
+```{Remove total.sulfur.dioxide higher than 300 and redraw the graph}
+WhiteWine %>% filter(total.sulfur.dioxide< 300) %>%  ggplot(  aes(x = total.sulfur.dioxide, stat = "count")) + geom_histogram(binwidth = 10) +  scale_y_sqrt()   
+```
+The total.sulfur.dioxide is approximately symmetrical. Most of wines have total.sulfur.dioxide between 100 and 200.
+
+#Univariate Analysis
+
+I wonder if there is a algorithm which allow me to evaluate quality gradually. i.e use alchohol to distinguish low from middle and high, then use citric.acid to distinguish middle from high.
+
+The sulphates and volatile.acidity don't have much difference from low quality to high quality wine.
+The alcohol,chlorides, density, PH, residual.sugar and total.sulfur.dioxide have obvious trends from low to high quality wine.
+The citric.acid, fixed.acidity,free.sulfur.dioxide might be able to distinguish high quality wine from middle quality wine.
+I wonder if there is a algorithm which allow me to evaluate quality gradually. i.e use alchohol to distinguish low from middle and high, then use citric.acid to distinguish middle from high.
+
+The volatile.acidity for most of wine is between 0.15 to 0.45. 
+I wonder if there is a algorithm which allow me to evaluate quality gradually. i.e use alchohol to distinguish low from middle and high, then use citric.acid to distinguish middle from high.
+
+The chlorides for most of wine is approximatly between 0.02 to 0.06 and peaking about 0.04.
+
+The wines which density larger than 1 have a lower quality than average.
+
+The count of alcohol is peaking at 9.5. 
+
+The pH distribution looks symmetrical and line up with the quality distribtution
+
+Reset binwidth to 0.5 and observe the residual.sugar peak around 2. 
+
+The total.sulfur.dioxide is approximately symmetrical. Most of wines have total.sulfur.dioxide between 100 and 200.
+
+
+What is the structure of your dataset?
+There are 4,898 observations of white wine in the dataset with 11 input variables (fixed acidity, volatile acidity, volatile acidity, citric acid, residual sugar, chlorides , free sulfur dioxide, total sulfur dioxide, density , pH, alcohol and sulphates ) and one output variable quality. 
+
+Other observations:
+
+Most diamonds are of ideal cut.
+The median carat size is 0.7.
+Most diamonds have a color of G or better.
+About 75% of diamonds have carat weights less than 1.
+The median price for a diamonds $2401 and the max price is $18,823.
+What is/are the main feature(s) of interest in your dataset?
+The main features in the data set are carat and price. I¡¯d like to determine which features are best for predicting the price of a diamond. I suspect carat and some combination of the other variables can be used to build a predictive model to price diamonds.
+
+What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+Carat, color, cut, clarity, depth, and table likely contribute to the price of a diamond. I think carat (the weight of a diamond) and clarity probably contribute most to the price after researching information on diamond prices.
+
+Did you create any new variables from existing variables in the dataset?
+I created a variable for the volume of diamonds using the density of diamonds and the carat weight of diamonds. This arose in the bivariate section of my analysis when I explored how the price of a diamond varied with its volume. At first volume was calculated by multiplying the dimensions x, y, and z together. However, the volume was a crude approximation since the diamonds were assumed to be rectangular prisms in the initial calculation.
+
+To better approximate the volume, I used the average density of diamonds. 1 carat is equivalent to 2 grams, and the average diamond density is between 3.15 and 3.53 g/cm^3 with pure diamonds having a density close to 3.52 g/cm^3. I used an average density of 3.34 g/cm^3 to estimate the volume of the diamonds.
+
+Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+I log-transformed the right skewed price and volume distributions. The tranformed distribution for price appears bimodal with the price peaking around $800 or so and again around $5000. There¡¯s no diamonds priced at $1500.
+
+When first calculating the volume using x, y, and z, some volumes were 0 or could not be calculated because data was missing. Additionally, some values for the dimensions x, y, and z seemed too large. In the subset called noVolume, all dimensions (x, y, and z) are missing or the z value is 0. The diamonds in this subset tend to be very expensive or fall in the third quartile of the entire diamonds data set.
+
+#Bivariate Plots Section
+```{calculate correlation coefficient}
+WhiteWine_cor <- cor(WhiteWine[-c(1)])
+WhiteWine_cor
+corrplot(WhiteWine_cor, type="upper", order="hclust", tl.col="black", tl.srt=45)
+```
+According to the matrix of correlation coefficient, The quality is mostly related to five physicochemical properties "alcohol", "density", "chlorides", "volatile.acidity" and  "total.sulfur.dioxid"
+
+
+```{use ggally to glimpse}
+ggpairs(data = WhiteWine,columns = 2:13,title = "White Wine Quanlity",colour = "set")
+```
+As shown in the diagram, I cannot find significant relations between quality and other attributes. 
+It seems residual.sugar and density correlate with each other. The free.sulfur.dioxide correlate with total.sulfur.dioxide.
+
+```{check correlation between quality and alcohol}
+ggplot(data = WhiteWine, aes(x = quality, y = alcohol,group = quality)) + geom_boxplot()
+```
+It looks like high quality wines tend to have higher alcohol. However, the alcohol has a decreasing trend from quality 3 to quality 5 followed by a increasing trend from quality 5 to 9.
+
+```{check correlation between quality and density}
+WhiteWine %>% filter(density <= 1 ) %>% ggplot(aes(x = quality, y = density,group = quality)) + geom_boxplot()
+```
+The trend of correlation for quality and density is opposite to alcohol and quality. median density increase from quality 3 to 5 then decrease from quality 5 to 9.
+Also, alcohol and density might have an opposite correlation.
+
+
+```{check correlation between alcohol and density}
+WhiteWine %>% filter(density <= 1 ) %>%  ggplot(aes(x = density, y = alcohol)) + geom_point()
+```
+There is a clear correlation between alcohol and density, more alcohol in the wine smaller density the wine is.
+
+
+```{check correlation between quality and chlorides}
+WhiteWine %>% filter(chlorides <= 0.15 ) %>%  ggplot(  aes(x = quality, y = chlorides,group = quality)) + geom_boxplot()
+```
+There are two weak trends of correlation between chlorides and quality. the median of chlorides grows as quality increase from 3 to 5. Then, median of chlorides goes down as quality increase from 5 to 9.  
+
+```{check correlation between quality and volatile.acidity}
+WhiteWine %>% ggplot(aes(x = quality, y = volatile.acidity,group = quality)) + geom_boxplot()
+```
+For the correlation between volatile.acidity and quality, there is only an absent trend shows the median of voltaile goes up as the quality increase from 6 to 9. I dont' thing the correlation is significant.
+
+
+```{check correlation between quality and total.sulfur.dioxide}
+WhiteWine %>% ggplot(aes(x = quality, y = total.sulfur.dioxide,group = quality)) + geom_boxplot()
+```
+No trend can be identified on the graph, I reckon the correlation of quality and total.sulfur.dioxide is pretty weak.
+
+#Multivariate Plots Section
+```{}
+WhiteWine %>% filter(density <= 1 ) %>% dplyr::mutate(quality = factor(quality, levels = c("0","1","2","3","4","5","6","7", "8","9","10"))) %>% ggplot(aes(x = density, y = alcohol, color = quality )) +  geom_point(alpha = 0.5, size = 1, position = 'jitter') + scale_color_brewer(type="seq", palette=1) +  
+  ggtitle('') + guides(color = guide_legend(title = 'Quality'))
+```
+The color of left upper corner is dark than the right bottom, which means higher alcohol and lower density provide better quality
+
+
+```{Three Variables: alcohol, density, quality }
+WhiteWine %>% filter(density <= 1 ) %>% dplyr::mutate(quality = factor(quality, levels = c("0","1","2","3","4","5","6","7", "8","9","10"))) %>% ggplot(aes(x = alcohol, y = density, color = quality )) + 
+  geom_point(alpha = 0.5, position = 'jitter') +
+  scale_y_continuous(limits = c(0.985, 1.005)) +
+  scale_color_brewer(type = 'seq', palette=3, guide = guide_legend(title = 'Quality', reverse = T,override.aes = list(alpha = 1, size = 2)))
+```
+
+```{4 variables}
+
+ggplot(WhiteWine, aes(x=chlorides)) +
+  geom_histogram(position="dodge") +
+  scale_x_continuous(limits = c(0.01, 0.1), breaks = seq(0.01, 0.1, 0.005)) +
+  scale_fill_brewer()
+  
+WhiteWine %>% filter(density <= 1 ) %>% dplyr::mutate(quality = factor(quality, levels = c("0","1","2","3","4","5","6","7", "8","9","10"))) %>%  ggplot(aes(x = alcohol, y = density, color = quality,size = chlorides)) + 
+  geom_point(alpha = 0.5, position = 'jitter') +
+  scale_y_continuous(limits = c(0.985, 1.005)) +
+  scale_color_brewer(type = 'seq', palette=3, guide = guide_legend(title = 'Quality', reverse = T,override.aes = list(alpha = 1, size = 2)))+
+  scale_size_area(limits = c(0.01, 0.1), breaks = seq(0.01, 0.1, 0.005))
+
+
+```
+
+
+
+
+
+```{linear regression model}
+WhiteWine$quality <- as.numeric(WhiteWine$quality)
+
+
+lm1 <- lm(quality ~ alcohol, data = WhiteWine)
+lm2 <- update(lm1, ~ . + density)
+lm3 <- update(lm2, ~ . + chlorides)
+mtable(lm1, lm2, lm3)
+mtable(lm1)
+predictedY <- predict(lm3, WhiteWine)
+lm3$residuals
+error <- lm3$residuals  # same as data$Y - predictedY
+predictionRMSE <- rmse(error)
+predictionRMSE
+
+data.frame(real = WhiteWine$quality, pred = predictedY)
+
+
+plot(WhiteWine$alcohol,WhiteWine$quality )
+abline(mbig1)
+```
+
+```{support vector machine}
+WhiteWine$quality <- as.numeric(WhiteWine$quality)
+svm1 <- svm(quality ~ alcohol, data = WhiteWine)
+svm2 <- update(svm1, ~ . + density)
+svm3 <- update(svm2, ~ . + chlorides)
+
+predictedY_svm <- predict(svm3, WhiteWine)
+error <- WhiteWine$quality - predictedY_svm
+svrPredictionRMSE <- rmse(error)
+svrPredictionRMSE 
+
+
+
+svm(quality ~ .,  data = WhiteWine[,c("alcohol","density","chlorides","quality")])
+
+tuneResult <- tune(svm, quality ~ .,  data = WhiteWine[,c("alcohol","density","chlorides","quality")],
+                    ranges = list(epsilon = seq(0,1,0.1), cost = 2^(2:4)))
+tuneResult
+
+
+
+svm1 <- svm(quality ~ alcohol, data = WhiteWine)
+svm2 <- update(svm1, ~ . + density)
+svm3 <- update(svm2, ~ . + chlorides)
+
+predictedY_svm <- predict(svm3, WhiteWine, epsilon = 0.3, cost = 6)
+error <- WhiteWine$quality - predictedY_svm
+svrPredictionRMSE <- rmse(error)
+svrPredictionRMSE 
+
+ 0.7842435
+
+- best parameters:
+ epsilon cost
+     0.3    4
+
+```
+
+#multivariate 
+
+
+# Final Plots and Summary
+You will select three plots from your analysis to polish and share in this section. The three plots should show different trends and should be polished with appropriate labels, units, and titles 
+
+# Reflection
+This should contain a few sentences about your struggles, successes, and ideas for future exploration on the data se
